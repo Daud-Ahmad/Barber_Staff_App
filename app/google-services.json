@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "822188233003",
+    "project_id": "the-barber-app-8cf6d",
+    "storage_bucket": "the-barber-app-8cf6d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:822188233003:android:36852007776fc321f4756e",
+        "android_client_info": {
+          "package_name": "com.qtt.barberstaffapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBiqYAa_lbiLIzuQTt4B-LzA6mfoMhIauE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:822188233003:android:08247ecda683558af4756e",
+        "android_client_info": {
+          "package_name": "com.qtt.thebarber"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBiqYAa_lbiLIzuQTt4B-LzA6mfoMhIauE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
