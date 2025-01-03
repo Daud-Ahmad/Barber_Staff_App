@@ -2,7 +2,6 @@ package com.qtt.barberstaffapp;
 
 import android.content.DialogInterface;
 import android.content.Intent;
-import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.Menu;
@@ -24,8 +23,11 @@ import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.ListenerRegistration;
 import com.google.firebase.firestore.QueryDocumentSnapshot;
 import com.google.firebase.firestore.QuerySnapshot;
+import com.qtt.barberstaffapp.Adapter.HorizontalCalendar;
 import com.qtt.barberstaffapp.Adapter.MyTimeSlotAdapter;
 import com.qtt.barberstaffapp.Common.Common;
+import com.qtt.barberstaffapp.Common.LoadingDialog;
+import com.qtt.barberstaffapp.Common.SharedPreferencesClass;
 import com.qtt.barberstaffapp.Common.SpacesItemDecoration;
 import com.qtt.barberstaffapp.Interface.INotificationCountListener;
 import com.qtt.barberstaffapp.Interface.ITimeSlotLoadListener;
@@ -57,17 +59,14 @@ public class StaffHomeActivity extends AppCompatActivity implements ITimeSlotLoa
     INotificationCountListener iNotificationCountListener;
 
     DocumentReference barberDoc;
-//    android.app.AlertDialog dialog;
+    private LoadingDialog dialog;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         binding = ActivityStaffHomeBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            getWindow().setStatusBarColor(this.getResources().getColor(R.color.colorPrimary));
-        }
+        getWindow().setStatusBarColor(this.getResources().getColor(R.color.colorPrimary));
 
         init();
         initView();
@@ -105,8 +104,7 @@ public class StaffHomeActivity extends AppCompatActivity implements ITimeSlotLoa
         tvBarberName = header.findViewById(R.id.tv_barber_name);
         tvBarberName.setText(new StringBuilder().append("Hi! ").append(Common.currentBarber.getName()).toString());
 
-        //
-//        dialog = new SpotsDialog.Builder().setContext(this).setCancelable(false).build();
+        dialog = new LoadingDialog(this);
 
         Calendar date = Calendar.getInstance();
         date.add(Calendar.DATE, 0);
@@ -120,6 +118,19 @@ public class StaffHomeActivity extends AppCompatActivity implements ITimeSlotLoa
         startDate.add(Calendar.DATE, 0);
         Calendar endDate = Calendar.getInstance();
         endDate.add(Calendar.DATE, 4); //current date + 2 day
+
+        new HorizontalCalendar(
+                this,
+                binding.rvCalendar,
+                startDate.getTime(),
+                endDate.getTime(),
+                selectedDate -> {
+                    if (selectedDate.getTimeInMillis() != Common.bookingDate.getTimeInMillis()) {
+                        Common.bookingDate = selectedDate;
+                        loadAvailableTimeSlotOfBarber(Common.currentBarber.getBarberId(), Common.simpleDateFormat.format(selectedDate.getTime()));
+                    }
+                }
+        );
 
 //        HorizontalCalendar horizontalCalendar = new HorizontalCalendar.Builder(this, R.id.calendar_view)
 //                .range(startDate, endDate)
@@ -152,11 +163,12 @@ public class StaffHomeActivity extends AppCompatActivity implements ITimeSlotLoa
 //                        Paper.book().delete(Common.SALON_KEY);
 //                        Paper.book().delete(Common.STATE_KEY);
 
+                        SharedPreferencesClass.saveString(StaffHomeActivity.this, Common.LOGED_KEY, "");
+
                         Intent intent = new Intent(StaffHomeActivity.this, MainActivity.class);
                         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK);
                         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                         startActivity(intent);
-                        finish();
                     }
                 }).setNegativeButton("NO", new DialogInterface.OnClickListener() {
             @Override
@@ -167,7 +179,7 @@ public class StaffHomeActivity extends AppCompatActivity implements ITimeSlotLoa
     }
 
     private void loadAvailableTimeSlotOfBarber(String barberId, final String date) {
-//        dialog.show();
+        dialog.show();
 
         //Check info of barber
         barberDoc.get()
@@ -266,8 +278,7 @@ public class StaffHomeActivity extends AppCompatActivity implements ITimeSlotLoa
                 .setPositiveButton("YES", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
-                        //TO DO
-                        Toast.makeText(StaffHomeActivity.this, "exit", Toast.LENGTH_SHORT).show();
+                        finish();
                     }
                 }).setNegativeButton("NO", new DialogInterface.OnClickListener() {
             @Override
@@ -282,14 +293,14 @@ public class StaffHomeActivity extends AppCompatActivity implements ITimeSlotLoa
         MyTimeSlotAdapter myTimeSlotAdapter = new MyTimeSlotAdapter(this, timeSlotList);
         binding.recyclerTimeSlot.setAdapter(myTimeSlotAdapter);
 
-//        dialog.dismiss();
+        dialog.dismiss();
     }
 
     @Override
     public void onTimeSlotLoadFailed(String message) {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
 
-//        dialog.dismiss();
+        dialog.dismiss();
     }
 
     @Override
@@ -297,7 +308,7 @@ public class StaffHomeActivity extends AppCompatActivity implements ITimeSlotLoa
         MyTimeSlotAdapter myTimeSlotAdapter = new MyTimeSlotAdapter(this);
         binding.recyclerTimeSlot.setAdapter(myTimeSlotAdapter);
 
-//        dialog.dismiss();
+        dialog.dismiss();
     }
 
     @Override

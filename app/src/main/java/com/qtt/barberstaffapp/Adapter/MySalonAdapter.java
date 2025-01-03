@@ -1,6 +1,5 @@
 package com.qtt.barberstaffapp.Adapter;
 
-import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -12,7 +11,6 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.cardview.widget.CardView;
-import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.gms.tasks.OnCompleteListener;
@@ -23,6 +21,7 @@ import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.QuerySnapshot;
 import com.qtt.barberstaffapp.Common.Common;
 import com.qtt.barberstaffapp.Common.CustomLoginDialog;
+import com.qtt.barberstaffapp.Common.LoadingDialog;
 import com.qtt.barberstaffapp.Interface.IDialogClickListener;
 import com.qtt.barberstaffapp.Interface.IGetBarberListener;
 import com.qtt.barberstaffapp.Interface.IRecyclerItemSelectedListener;
@@ -91,8 +90,8 @@ public class MySalonAdapter extends RecyclerView.Adapter<MySalonAdapter.SalonVie
 
     @Override
     public void onClickPositiveButton(final DialogInterface dialogInterface, final String userName, String password) {
-//        final AlertDialog dialog = new SpotsDialog.Builder().setContext(context).setCancelable(false).build();
-//        dialog.show();
+        final LoadingDialog dialog = new LoadingDialog(context);
+        dialog.show();
 
         ///AllSalon/Florida/Branch/0n7ikrtgQXW4EXhuJ0qy/Barbers/Nsa4hBFukd8UZYMiRe5y
         FirebaseFirestore.getInstance()
@@ -109,7 +108,7 @@ public class MySalonAdapter extends RecyclerView.Adapter<MySalonAdapter.SalonVie
                     @Override
                     public void onFailure(@NonNull Exception e) {
                         Toast.makeText(context, e.getMessage(), Toast.LENGTH_SHORT).show();
-//                        dialog.dismiss();
+                        dialog.dismiss();
                     }
                 }).addOnCompleteListener(new OnCompleteListener<QuerySnapshot>() {
             @Override
@@ -118,7 +117,7 @@ public class MySalonAdapter extends RecyclerView.Adapter<MySalonAdapter.SalonVie
                     if (task.getResult().size() > 0) {
                         dialogInterface.dismiss();
                         
-//                        dialog.dismiss();
+                        dialog.dismiss();
 
                         iUserLoginRememberListener.onUserLoginSuccess(userName);
 
@@ -137,7 +136,7 @@ public class MySalonAdapter extends RecyclerView.Adapter<MySalonAdapter.SalonVie
 
                     } else {
                         Toast.makeText(context, "Wrong username/ password", Toast.LENGTH_SHORT).show();
-//                        dialog.dismiss();
+                        dialog.dismiss();
                     }
                 }
             }

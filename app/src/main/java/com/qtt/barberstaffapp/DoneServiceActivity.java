@@ -1,15 +1,10 @@
 package com.qtt.barberstaffapp;
 
-import android.app.AlertDialog;
+import android.Manifest;
 import android.content.Intent;
-import android.graphics.Bitmap;
-import android.graphics.Matrix;
-import android.media.ExifInterface;
+import android.content.pm.PackageManager;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
-import android.os.StrictMode;
 import android.provider.MediaStore;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -17,9 +12,13 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.Toast;
 
-import androidx.annotation.Nullable;
-import androidx.annotation.RequiresApi;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+import androidx.core.content.FileProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -33,6 +32,7 @@ import com.google.gson.Gson;
 import com.qtt.barberstaffapp.Adapter.MyCartAdapter;
 import com.qtt.barberstaffapp.Adapter.MyServiceAdapter;
 import com.qtt.barberstaffapp.Common.Common;
+import com.qtt.barberstaffapp.Common.LoadingDialog;
 import com.qtt.barberstaffapp.Common.SpacesItemDecoration;
 import com.qtt.barberstaffapp.EventBus.DismissDoneServiceEvent;
 import com.qtt.barberstaffapp.Fragment.ShoppingFragment;
@@ -57,14 +57,14 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Random;
 
-public class DoneServiceActivity extends AppCompatActivity implements IBarberServicesLoadListener, IOnShoppingItemSelected {
+public class DoneServiceActivity extends AppCompatActivity implements IBarberServicesLoadListener,
+        IOnShoppingItemSelected {
 
-    private static final int MY_CAMERA_REQUEST_CODE = 301;
     ActivityDoneServiceBinding binding;
+    private static final int REQUEST_CAMERA_PERMISSION = 101;
 
-//    AlertDialog dialog;
+    private LoadingDialog dialog;
     IBarberServicesLoadListener iBarberServicesLoadListener;
     HashSet<BarberServices> servicesAdded;
     LayoutInflater inflater;
@@ -73,22 +73,51 @@ public class DoneServiceActivity extends AppCompatActivity implements IBarberSer
     Uri fileUri;
 
     StorageReference storageReference;
+    private String currentPhotoPath;
+
+    private final ActivityResultLauncher<Intent> takePictureLauncher =
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+                if (result.getResultCode() == RESULT_OK) {
+                    File file = new File(currentPhotoPath);
+                    if (file.exists()) {
+                        binding.imgCustomerHair.setImageURI(Uri.fromFile(file));
+                        binding.imgCustomerHair.setVisibility(View.VISIBLE);
+                        binding.btnFinish.setEnabled(true);
+                    }
+                }
+            });
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         binding = ActivityDoneServiceBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            getWindow().setStatusBarColor(this.getResources().getColor(R.color.colorPrimary));
-        }
+        getWindow().setStatusBarColor(this.getResources().getColor(R.color.colorPrimary));
 
         setCustomerInformation();
 
         init();
         initView();
         loadBarberServices();
+    }
+
+    private void dispatchTakePictureIntent() {
+        Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+        if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
+            File photoFile = null;
+            try {
+                photoFile = createImageFile();
+            } catch (IOException ex) {
+                ex.printStackTrace();
+            }
+            if (photoFile != null) {
+                fileUri = FileProvider.getUriForFile(this,
+                        getApplicationContext().getPackageName() + ".fileprovider",
+                        photoFile);
+                takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, fileUri);
+                takePictureLauncher.launch(takePictureIntent);
+            }
+        }
     }
 
     @Override
@@ -132,14 +161,9 @@ public class DoneServiceActivity extends AppCompatActivity implements IBarberSer
         });
 
         binding.imgAddCustomerHair.setOnClickListener(v -> {
-            Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-            StrictMode.VmPolicy.Builder builder = new StrictMode.VmPolicy.Builder();
-            StrictMode.setVmPolicy(builder.build());
-
-            fileUri = getOutputMediaFileUri();
-
-            intent.putExtra(MediaStore.EXTRA_OUTPUT, fileUri);
-            startActivityForResult(intent, MY_CAMERA_REQUEST_CODE);
+            if (checkAndRequestCameraPermission()) {
+                dispatchTakePictureIntent();
+            }
         });
 
         binding.btnFinish.setOnClickListener(v -> {
@@ -158,7 +182,7 @@ public class DoneServiceActivity extends AppCompatActivity implements IBarberSer
 
     private void upLoadPicture(Uri fileUri) {
         if (fileUri != null) {
-//            dialog.show();
+            dialog.show();
 
             String fileName = Common.getFileName(getContentResolver(), fileUri);
             String path = new StringBuilder("Customer_Pictures/").append(fileName).toString();
@@ -178,7 +202,7 @@ public class DoneServiceActivity extends AppCompatActivity implements IBarberSer
                 if (task12.isSuccessful()) {
                     String url = task12.getResult().toString().substring(0, task12.getResult().toString().indexOf("&token"));
                     Log.d("AAAAA", "download: " + url);
-//                    dialog.dismiss();
+                    dialog.dismiss();
 
                     //Create fragment total price
                     TotalPriceFragment totalPriceFragment = TotalPriceFragment.getInstance();
@@ -191,7 +215,7 @@ public class DoneServiceActivity extends AppCompatActivity implements IBarberSer
 
                 }
             }).addOnFailureListener(e -> {
-//                dialog.dismiss();
+                dialog.dismiss();
                 Toast.makeText(DoneServiceActivity.this, e.getMessage(), Toast.LENGTH_SHORT).show();
             });
         } else {
@@ -199,31 +223,9 @@ public class DoneServiceActivity extends AppCompatActivity implements IBarberSer
         }
     }
 
-    private Uri getOutputMediaFileUri() {
-        return Uri.fromFile(getOutputMediaFile());
-    }
-
-    private File getOutputMediaFile() {
-        File mediaDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
-                "BarberStaffApp");
-
-        if (!mediaDir.exists()) {
-            if (!mediaDir.mkdir()) {
-                return null;
-            }
-        }
-
-        String time_tamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
-        File mediaFile = new File(mediaDir.getPath() + File.separator + "IMG_" + time_tamp +
-                "_" + new Random().nextInt() + ".jpg");
-
-        return mediaFile;
-    }
-
     private void loadBarberServices() {
         ///AllSalon/Florida/Branch/0n7ikrtgQXW4EXhuJ0qy/Services/
-//        dialog.show();
-
+        dialog.show();
         FirebaseFirestore.getInstance()
                 .collection("AllSalon")
                 .document(Common.stateName)
@@ -246,10 +248,7 @@ public class DoneServiceActivity extends AppCompatActivity implements IBarberSer
     }
 
     private void init() {
-//        dialog = new SpotsDialog.Builder()
-//                .setCancelable(false)
-//                .setContext(this)
-//                .build();
+        dialog = new LoadingDialog(this);
 
         iBarberServicesLoadListener = this;
         servicesAdded = new HashSet<>();
@@ -272,12 +271,45 @@ public class DoneServiceActivity extends AppCompatActivity implements IBarberSer
                             user = documentSnapshot.toObject(User.class);
                         }
 
-                        if (user != null && !user.getAvatar().isEmpty()) {
+                        if (user != null && user.getAvatar() != null && !user.getAvatar().isEmpty()) {
                             Picasso.get().load(user.getAvatar()).error(R.drawable.user_avatar).into(binding.imgUserAvatar);
                         }
                     }
                 });
         //avatar
+    }
+
+    private boolean checkAndRequestCameraPermission() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, REQUEST_CAMERA_PERMISSION);
+            return false;
+        }
+        return true;
+    }
+
+    private File createImageFile() throws IOException {
+        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+        String imageFileName = "JPEG_" + timeStamp + "_";
+        File storageDir = getExternalFilesDir(null);
+        File image = File.createTempFile(
+                imageFileName,
+                ".jpg",
+                storageDir
+        );
+        currentPhotoPath = image.getAbsolutePath();
+        return image;
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_CAMERA_PERMISSION) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                dispatchTakePictureIntent();
+            } else {
+                Toast.makeText(this, "Camera permission is required to use the camera.", Toast.LENGTH_SHORT).show();
+            }
+        }
     }
 
 
@@ -296,13 +328,13 @@ public class DoneServiceActivity extends AppCompatActivity implements IBarberSer
 
 
         loadExtraItems();
-//        dialog.dismiss();
+        dialog.dismiss();
     }
 
     @Override
     public void onBarberServicesLoadFailed(String message) {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
-//        dialog.dismiss();
+        dialog.dismiss();
     }
 
     @Override
@@ -353,54 +385,6 @@ public class DoneServiceActivity extends AppCompatActivity implements IBarberSer
             binding.recyclerCart.setAdapter(myCartAdapter);
 
         }
-    }
-
-    @RequiresApi(api = Build.VERSION_CODES.N)
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == MY_CAMERA_REQUEST_CODE && resultCode == RESULT_OK) {
-            Bitmap bitmap = null;
-            ExifInterface exifInterface = null;
-
-            try {
-                bitmap = MediaStore.Images.Media.getBitmap(this.getContentResolver(), fileUri);
-                exifInterface = new ExifInterface(getContentResolver().openInputStream(fileUri));
-
-                int orientation = exifInterface.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_UNDEFINED);
-
-                Bitmap rotateBitmap = null;
-                switch (orientation) {
-                    case ExifInterface.ORIENTATION_ROTATE_90:
-                        rotateBitmap = rotateBitmap(bitmap, 90);
-                        break;
-                    case ExifInterface.ORIENTATION_ROTATE_180:
-                        rotateBitmap = rotateBitmap(bitmap, 180);
-                        break;
-                    case ExifInterface.ORIENTATION_ROTATE_270:
-                        rotateBitmap = rotateBitmap(bitmap, 270);
-                        break;
-                    case ExifInterface.ORIENTATION_NORMAL:
-                    default:
-                        rotateBitmap = bitmap;
-                        break;
-                }
-
-                binding.imgAddCustomerHair.setVisibility(View.GONE);
-                binding.imgCustomerHair.setVisibility(View.VISIBLE);
-                binding.imgCustomerHair.setImageBitmap(rotateBitmap);
-                binding.btnFinish.setEnabled(true);
-
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
-    private Bitmap rotateBitmap(Bitmap bitmap, int degree) {
-        Matrix matrix = new Matrix();
-        matrix.postRotate(degree);
-        return Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
     }
 
     @Subscribe(sticky = true, threadMode = ThreadMode.MAIN)

@@ -68,7 +68,6 @@ public class MyStateAdapter extends RecyclerView.Adapter<MyStateAdapter.MyViewHo
     }
 
     public class MyViewHolder extends RecyclerView.ViewHolder implements View.OnClickListener {
-//        @BindView(R.id.tv_state_name)
         TextView tvStateName;
 
         IRecyclerItemSelectedListener iRecyclerItemSelectedListener;
@@ -79,8 +78,7 @@ public class MyStateAdapter extends RecyclerView.Adapter<MyStateAdapter.MyViewHo
 
         public MyViewHolder(@NonNull View itemView) {
             super(itemView);
-//            ButterKnife.bind(this, itemView);
-
+            tvStateName = itemView.findViewById(R.id.tv_state_name);
             itemView.setOnClickListener(this);
         }
 

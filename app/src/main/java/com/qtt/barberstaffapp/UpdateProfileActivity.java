@@ -1,22 +1,22 @@
 package com.qtt.barberstaffapp;
 
+import android.Manifest;
 import android.content.Intent;
-import android.graphics.Bitmap;
-import android.graphics.Matrix;
-import android.media.ExifInterface;
+import android.content.pm.PackageManager;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
-import android.os.StrictMode;
 import android.provider.MediaStore;
 import android.util.Log;
 import android.view.MenuItem;
 import android.widget.Toast;
 
-import androidx.annotation.Nullable;
-import androidx.annotation.RequiresApi;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+import androidx.core.content.FileProvider;
 
 import com.google.android.gms.tasks.Task;
 import com.google.firebase.firestore.FirebaseFirestore;
@@ -24,6 +24,7 @@ import com.google.firebase.storage.FirebaseStorage;
 import com.google.firebase.storage.StorageReference;
 import com.google.firebase.storage.UploadTask;
 import com.qtt.barberstaffapp.Common.Common;
+import com.qtt.barberstaffapp.Common.LoadingDialog;
 import com.qtt.barberstaffapp.databinding.ActivityUpdateProfileBinding;
 import com.squareup.picasso.Picasso;
 
@@ -31,31 +32,37 @@ import java.io.File;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.Random;
 
 public class UpdateProfileActivity extends AppCompatActivity {
     ActivityUpdateProfileBinding binding;
-    private static final int MY_CAMERA_REQUEST_CODE = 911;
     Uri fileUri;
-//    AlertDialog dialog;
+    private LoadingDialog dialog;
     StorageReference storageReference;
+    private static final int REQUEST_CAMERA_PERMISSION = 102;
+
+    private String currentPhotoPath;
+
+    private final ActivityResultLauncher<Intent> takePictureLauncher =
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+                if (result.getResultCode() == RESULT_OK) {
+                    File file = new File(currentPhotoPath);
+                    if (file.exists()) {
+                        binding.imgUserAvatar.setImageURI(Uri.fromFile(file));
+                    }
+                }
+            });
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         binding = ActivityUpdateProfileBinding.inflate(getLayoutInflater());
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            getWindow().setStatusBarColor(this.getResources().getColor(R.color.colorPrimary));
-        }
+        getWindow().setStatusBarColor(this.getResources().getColor(R.color.colorPrimary));
 
         getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         getSupportActionBar().setTitle("Profile");
 
-//        dialog = new SpotsDialog.Builder()
-//                .setCancelable(false)
-//                .setContext(this)
-//                .build();
+        dialog = new LoadingDialog(this);
 
         initView();
         setContentView(binding.getRoot());
@@ -77,24 +84,19 @@ public class UpdateProfileActivity extends AppCompatActivity {
         binding.edtUserPhone.setText(Common.currentBarber.getPhone());
 
 
-        if (!Common.currentBarber.getAvatar().isEmpty()) {
+        if (Common.currentBarber.getAvatar() != null && !Common.currentBarber.getAvatar().isEmpty()) {
             Picasso.get().load(Common.currentBarber.getAvatar()).error(R.drawable.user_avatar).into(binding.imgUserAvatar);
         }
 
         binding.imgAddAvatar.setOnClickListener(v -> {
-            Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-            StrictMode.VmPolicy.Builder builder = new StrictMode.VmPolicy.Builder();
-            StrictMode.setVmPolicy(builder.build());
-
-            fileUri = getOutputMediaFileUri();
-
-            intent.putExtra(MediaStore.EXTRA_OUTPUT, fileUri);
-            startActivityForResult(intent, MY_CAMERA_REQUEST_CODE);
+            if (checkAndRequestCameraPermission()) {
+                dispatchTakePictureIntent();
+            }
         });
 
         binding.btnUpdate.setOnClickListener(v -> {
-//            dialog.show();
-            if (!Common.currentBarber.getName().equals(binding.edtUserName.getText().toString())) {
+            dialog.show();
+            if (Common.currentBarber.getName() == null || !Common.currentBarber.getName().equals(binding.edtUserName.getText().toString())) {
                 Common.currentBarber.setName(binding.edtUserName.getText().toString());
 
                 FirebaseFirestore.getInstance().collection("AllSalon")
@@ -109,7 +111,7 @@ public class UpdateProfileActivity extends AppCompatActivity {
                         }).addOnFailureListener(e -> Toast.makeText(this, e.getMessage(), Toast.LENGTH_SHORT).show());
             }
 
-            if (!Common.currentBarber.getAddress().equals(binding.edtUserAddress.getText().toString())) {
+            if (Common.currentBarber.getAddress() == null || !Common.currentBarber.getAddress().equals(binding.edtUserAddress.getText().toString())) {
                 Common.currentBarber.setAddress(binding.edtUserAddress.getText().toString());
 
                 FirebaseFirestore.getInstance().collection("AllSalon")
@@ -124,13 +126,13 @@ public class UpdateProfileActivity extends AppCompatActivity {
                         }).addOnFailureListener(e -> Toast.makeText(this, e.getMessage(), Toast.LENGTH_SHORT).show());
             }
 
-            if (fileUri != null || Common.currentBarber.getAvatar().isEmpty()) {
+            if (fileUri != null) {
                 upLoadPicture(fileUri);
             }
 
-//            if (dialog.isShowing()) {
-//                dialog.dismiss();
-//            }
+            if (dialog.isShowing()) {
+                dialog.dismiss();
+            }
 
             Toast.makeText(this, "Update successfully", Toast.LENGTH_SHORT).show();
 
@@ -144,7 +146,7 @@ public class UpdateProfileActivity extends AppCompatActivity {
 
     private void upLoadPicture(Uri fileUri) {
         if (fileUri != null) {
-//            dialog.show();
+            dialog.show();
 
             String fileName = Common.getFileName(getContentResolver(), fileUri);
             String path = new StringBuilder("User_Avatar/").append(fileName).toString();
@@ -178,77 +180,65 @@ public class UpdateProfileActivity extends AppCompatActivity {
                                 Log.d("Update_profile", "upLoadPicture: successfully");
                                 Common.currentBarber.setAvatar(url);
                                 Picasso.get().load(Common.currentBarber.getAvatar()).error(R.drawable.user_avatar).into(binding.imgUserAvatar);
-//                                dialog.dismiss();
+                                dialog.dismiss();
                             }).addOnFailureListener(e -> Toast.makeText(this, e.getMessage(), Toast.LENGTH_SHORT).show());
                 }
             }).addOnFailureListener(e -> {
-//                dialog.dismiss();
+                dialog.dismiss();
                 Toast.makeText(this, e.getMessage(), Toast.LENGTH_SHORT).show();
             });
         }
     }
 
-    private Uri getOutputMediaFileUri() {
-        return Uri.fromFile(getOutputMediaFile());
-    }
-
-    private File getOutputMediaFile() {
-        File mediaDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
-                "BarberStaffApp");
-
-        if (!mediaDir.exists()) {
-            mediaDir.mkdir();
+    private boolean checkAndRequestCameraPermission() {
+        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, REQUEST_CAMERA_PERMISSION);
+            return false;
         }
-
-        String time_tamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
-        File mediaFile = new File(mediaDir.getPath() + File.separator + "IMG_" + time_tamp +
-                "_" + new Random().nextInt() + ".jpg");
-
-        return mediaFile;
+        return true;
     }
 
-    @RequiresApi(api = Build.VERSION_CODES.N)
     @Override
-    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == MY_CAMERA_REQUEST_CODE && resultCode == RESULT_OK) {
-            Bitmap bitmap = null;
-            ExifInterface exifInterface = null;
-
-            try {
-                bitmap = MediaStore.Images.Media.getBitmap(this.getContentResolver(), fileUri);
-                exifInterface = new ExifInterface(getContentResolver().openInputStream(fileUri));
-
-                int orientation = exifInterface.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_UNDEFINED);
-
-                Bitmap rotateBitmap = null;
-                switch (orientation) {
-                    case ExifInterface.ORIENTATION_ROTATE_90:
-                        rotateBitmap = rotateBitmap(bitmap, 90);
-                        break;
-                    case ExifInterface.ORIENTATION_ROTATE_180:
-                        rotateBitmap = rotateBitmap(bitmap, 180);
-                        break;
-                    case ExifInterface.ORIENTATION_ROTATE_270:
-                        rotateBitmap = rotateBitmap(bitmap, 270);
-                        break;
-                    case ExifInterface.ORIENTATION_NORMAL:
-                    default:
-                        rotateBitmap = bitmap;
-                        break;
-                }
-
-                binding.imgUserAvatar.setImageBitmap(rotateBitmap);
-
-            } catch (IOException e) {
-                e.printStackTrace();
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_CAMERA_PERMISSION) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                dispatchTakePictureIntent();
+            } else {
+                Toast.makeText(this, "Camera permission is required to use the camera.", Toast.LENGTH_SHORT).show();
             }
         }
     }
 
-    private Bitmap rotateBitmap(Bitmap bitmap, int degree) {
-        Matrix matrix = new Matrix();
-        matrix.postRotate(degree);
-        return Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
+    private void dispatchTakePictureIntent() {
+        Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+        if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
+            File photoFile = null;
+            try {
+                photoFile = createImageFile();
+            } catch (IOException ex) {
+                ex.printStackTrace();
+            }
+            if (photoFile != null) {
+                fileUri = FileProvider.getUriForFile(this,
+                        getApplicationContext().getPackageName() + ".fileprovider",
+                        photoFile);
+                takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, fileUri);
+                takePictureLauncher.launch(takePictureIntent);
+            }
+        }
+    }
+
+    private File createImageFile() throws IOException {
+        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+        String imageFileName = "JPEG_" + timeStamp + "_";
+        File storageDir = getExternalFilesDir(null);
+        File image = File.createTempFile(
+                imageFileName,
+                ".jpg",
+                storageDir
+        );
+        currentPhotoPath = image.getAbsolutePath();
+        return image;
     }
 }

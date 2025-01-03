@@ -1,11 +1,10 @@
 package com.qtt.barberstaffapp;
 
 import android.Manifest;
+import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
-import android.os.Build;
 import android.os.Bundle;
-import android.util.Log;
 import android.view.WindowManager;
 import android.widget.Toast;
 
@@ -20,7 +19,8 @@ import com.google.firebase.firestore.CollectionReference;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.QuerySnapshot;
-import com.google.firebase.iid.FirebaseInstanceId;
+import com.google.firebase.messaging.FirebaseMessaging;
+import com.google.gson.Gson;
 import com.karumi.dexter.Dexter;
 import com.karumi.dexter.MultiplePermissionsReport;
 import com.karumi.dexter.PermissionToken;
@@ -28,13 +28,18 @@ import com.karumi.dexter.listener.PermissionRequest;
 import com.karumi.dexter.listener.multi.MultiplePermissionsListener;
 import com.qtt.barberstaffapp.Adapter.MyStateAdapter;
 import com.qtt.barberstaffapp.Common.Common;
+import com.qtt.barberstaffapp.Common.LoadingDialog;
+import com.qtt.barberstaffapp.Common.SharedPreferencesClass;
 import com.qtt.barberstaffapp.Common.SpacesItemDecoration;
 import com.qtt.barberstaffapp.Interface.IAllStateLoadListener;
+import com.qtt.barberstaffapp.Model.Barber;
 import com.qtt.barberstaffapp.Model.City;
+import com.qtt.barberstaffapp.Model.Salon;
 import com.qtt.barberstaffapp.databinding.ActivityMainBinding;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 public class MainActivity extends AppCompatActivity implements IAllStateLoadListener {
 
@@ -43,7 +48,7 @@ public class MainActivity extends AppCompatActivity implements IAllStateLoadList
     ActivityMainBinding binding;
 
     MyStateAdapter adapter;
-//    AlertDialog loadingDialog;
+    private LoadingDialog loadingDialog;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -56,9 +61,7 @@ public class MainActivity extends AppCompatActivity implements IAllStateLoadList
         getSupportActionBar().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         getSupportActionBar().setDisplayShowTitleEnabled(false);
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            getWindow().setStatusBarColor(this.getResources().getColor(R.color.colorBackground));
-        }
+        getWindow().setStatusBarColor(this.getResources().getColor(R.color.colorBackground));
 
         Dexter.withContext(this)
                 .withPermissions(Manifest.permission.CAMERA,
@@ -66,16 +69,51 @@ public class MainActivity extends AppCompatActivity implements IAllStateLoadList
                         Manifest.permission.WRITE_EXTERNAL_STORAGE).withListener(new MultiplePermissionsListener() {
             @Override
             public void onPermissionsChecked(MultiplePermissionsReport report) {
-                FirebaseInstanceId.getInstance()
-                        .getInstanceId()
+
+                FirebaseMessaging.getInstance().getToken()
                         .addOnCompleteListener(task -> {
                             if (task.isSuccessful()) {
-                                Common.updateToken(MainActivity.this, task.getResult().getToken());
-
-                                Log.d("TOKEN_CLIENT_APP", task.getResult().getToken());
-
+                                Common.updateToken(MainActivity.this, task.getResult());
                             }
-                        }).addOnFailureListener(e -> Log.d("TOKEN_CLIENT_APP", e.getMessage()));
+                        })
+                        .addOnFailureListener(e -> {
+                        });
+
+
+//                FirebaseInstanceId.getInstance()
+//                        .getInstanceId()
+//                        .addOnCompleteListener(task -> {
+//                            if (task.isSuccessful()) {
+//                                Common.updateToken(MainActivity.this, task.getResult().getToken());
+//
+//                                Log.d("TOKEN_CLIENT_APP", task.getResult().getToken());
+//
+//                            }
+//                        }).addOnFailureListener(e -> Log.d("TOKEN_CLIENT_APP", e.getMessage()));
+
+               String user = SharedPreferencesClass.getString(MainActivity.this, Common.LOGED_KEY);
+                if (user == null || user.isEmpty()) {
+                    initView();
+                    init();
+                    loadAllStateFromFireStore();
+                } else {
+                    Common.stateName = SharedPreferencesClass.getString(MainActivity.this, Common.STATE_KEY);
+
+                    Map<String, String> salonMap = SharedPreferencesClass.getJson(MainActivity.this, Common.SALON_KEY);
+                    Gson gson = new Gson();
+                    String json = gson.toJson(salonMap); // Convert map to JSON string
+                    Common.selectedSalon = gson.fromJson(json, Salon.class);
+
+
+                    Map<String, String> barberMap = SharedPreferencesClass.getJson(MainActivity.this, Common.BARBER_KEY);
+                    String barberJson = gson.toJson(barberMap); // Convert map to JSON string
+                    Common.currentBarber = gson.fromJson(barberJson, Barber.class);
+
+                    Intent intent = new Intent(MainActivity.this, StaffHomeActivity.class);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(intent);
+                }
 
 //                Paper.init(MainActivity.this);
 //                String user = Paper.book().read(Common.LOGED_KEY);
@@ -108,7 +146,7 @@ public class MainActivity extends AppCompatActivity implements IAllStateLoadList
     }
 
     private void loadAllStateFromFireStore() {
-//        loadingDialog.show();
+        loadingDialog.show();
 
         allSalonCol.get()
                 .addOnCompleteListener(new OnCompleteListener<QuerySnapshot>() {
@@ -121,16 +159,16 @@ public class MainActivity extends AppCompatActivity implements IAllStateLoadList
                             }
 
                             iAllStateLoadListener.onAllStateLoadSuccess(cities);
-//                            if (loadingDialog.isShowing())
-//                                loadingDialog.dismiss();
+                            if (loadingDialog.isShowing())
+                                loadingDialog.dismiss();
                         }
                     }
                 }).addOnFailureListener(new OnFailureListener() {
             @Override
             public void onFailure(@NonNull Exception e) {
                 iAllStateLoadListener.onAllStateLoadFailed(e.getMessage());
-//                if (loadingDialog.isShowing())
-//                    loadingDialog.dismiss();
+                if (loadingDialog.isShowing())
+                    loadingDialog.dismiss();
             }
         });
     }
@@ -138,7 +176,7 @@ public class MainActivity extends AppCompatActivity implements IAllStateLoadList
     private void init() {
         allSalonCol = FirebaseFirestore.getInstance().collection("AllSalon");
         iAllStateLoadListener = this;
-//        loadingDialog = new SpotsDialog.Builder().setContext(this).setCancelable(false).build();
+        loadingDialog = new LoadingDialog(this);
     }
 
     private void initView() {

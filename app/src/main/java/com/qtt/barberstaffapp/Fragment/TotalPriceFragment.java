@@ -16,19 +16,17 @@ import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
 import com.google.firebase.Timestamp;
 import com.google.firebase.firestore.CollectionReference;
 import com.google.firebase.firestore.DocumentReference;
-import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.qtt.barberstaffapp.Adapter.MyInvoiceItemAdapter;
 import com.qtt.barberstaffapp.Adapter.MyInvoiceServiceAdapter;
 import com.qtt.barberstaffapp.Common.Common;
+import com.qtt.barberstaffapp.Common.LoadingDialog;
 import com.qtt.barberstaffapp.EventBus.DismissDoneServiceEvent;
 import com.qtt.barberstaffapp.Model.BarberServices;
 import com.qtt.barberstaffapp.Model.CartItem;
-import com.qtt.barberstaffapp.Model.FCMSendData;
 import com.qtt.barberstaffapp.Model.Invoice;
 import com.qtt.barberstaffapp.Model.LookBook;
 import com.qtt.barberstaffapp.Model.MyNotification;
-import com.qtt.barberstaffapp.Model.MyToken;
 import com.qtt.barberstaffapp.Model.User;
 import com.qtt.barberstaffapp.Retrofit.IFCMService;
 import com.qtt.barberstaffapp.Retrofit.RetrofitClient;
@@ -44,7 +42,6 @@ import java.util.Map;
 import java.util.UUID;
 
 import io.reactivex.disposables.CompositeDisposable;
-import io.reactivex.schedulers.Schedulers;
 
 /**
  * A simple {@link Fragment} subclass.
@@ -57,7 +54,7 @@ public class TotalPriceFragment extends BottomSheetDialogFragment {
     HashSet<BarberServices> servicesAdded = new HashSet<>();
 
     IFCMService ifcmService;
-//    AlertDialog dialog;
+    private LoadingDialog dialog;
     String imgUrl;
 
     private  static TotalPriceFragment instance;
@@ -151,7 +148,7 @@ public class TotalPriceFragment extends BottomSheetDialogFragment {
 
         binding.btnConfirm.setOnClickListener(v -> {
             //update infor set done = true
-//            dialog.show();
+            dialog.show();
             ///AllSalon/Florida/Branch/0n7ikrtgQXW4EXhuJ0qy/Barbers/Nsa4hBFukd8UZYMiRe5y/29_09_2019/10
             final DocumentReference bookingSet = FirebaseFirestore.getInstance()
                     .collection("AllSalon")
@@ -172,11 +169,11 @@ public class TotalPriceFragment extends BottomSheetDialogFragment {
                                 dataUpdated.put("done", true);
                                 bookingSet.update(dataUpdated)
                                         .addOnFailureListener(e -> {
-//                                            dialog.dismiss();
+                                            dialog.dismiss();
                                             Toast.makeText(getContext(), e.getMessage(), Toast.LENGTH_SHORT).show();
                                         }).addOnCompleteListener(task1 -> {
                                             if (task1.isSuccessful()) {
-//                                                dialog.dismiss();
+                                                dialog.dismiss();
                                                 createInvoice();
 
                                                 if (imgUrl != null) {
@@ -220,7 +217,7 @@ public class TotalPriceFragment extends BottomSheetDialogFragment {
                             }
                         }
                     }).addOnFailureListener(e -> {
-//                        dialog.dismiss();
+                        dialog.dismiss();
                         Toast.makeText(getContext(), e.getMessage(), Toast.LENGTH_SHORT).show();
                     });
         });
@@ -273,7 +270,7 @@ public class TotalPriceFragment extends BottomSheetDialogFragment {
         invoiceRef.document()
                 .set(invoice)
                 .addOnFailureListener(e -> {
-//                    dialog.dismiss();
+                    dialog.dismiss();
                     Toast.makeText(getContext(), e.getMessage(), Toast.LENGTH_SHORT).show();
                 }).addOnSuccessListener(aVoid -> sendNotificationUpdateToUser(Common.currentBookingInfo.getCustomerPhone()));
     }
@@ -303,57 +300,58 @@ public class TotalPriceFragment extends BottomSheetDialogFragment {
                             .whereEqualTo("userPhone", customerPhone)
                             .get()
                             .addOnCompleteListener(task1 -> {
-//                                dialog.dismiss();
+                                dialog.dismiss();
                                 if (task1.isSuccessful()) {
-                                    MyToken myToken = new MyToken();
-                                    for (DocumentSnapshot documentSnapshot : task1.getResult())
-                                        myToken = documentSnapshot.toObject(MyToken.class);
-
-                                    Log.d("FCM", "sendNotificationUpdateToUser: " + myToken);
-                                    //send notification
-                                    FCMSendData fcmSendData = new FCMSendData();
-                                    Map<String, String> dataSend = new HashMap<>();
-                                    dataSend.put("update_done", "true");
-
-                                    dataSend.put(Common.TITLE_KEY, "Finish Services");
-                                    dataSend.put(Common.CONTENT_KEY, "Thank you for booking our services (Barber: " + Common.currentBarber.getName() + ")");
-
-                                    //put information for rating
-                                    dataSend.put(Common.RATING_STATE_KEY, Common.stateName);
-                                    dataSend.put(Common.RATING_SALON_ID, Common.selectedSalon.getId());
-                                    dataSend.put(Common.RATING_SALON_NAME, Common.selectedSalon.getName());
-                                    dataSend.put(Common.RATING_BARBER_ID, Common.currentBarber.getBarberId());
-
-                                    fcmSendData.setTo(myToken.getToken());
-                                    fcmSendData.setData(dataSend);
-
-                                    compositeDisposable.add(ifcmService.sendNotification(fcmSendData)
-                                            .subscribeOn(Schedulers.io())
-                                            .observeOn(Schedulers.newThread())
-                                            .subscribe(fcmResponse -> {
-//                                                dialog.dismiss();
-                                                dismiss();
-                                                EventBus.getDefault().postSticky(new DismissDoneServiceEvent(true));
-                                            }, throwable -> {
-//                                                dialog.dismiss();
-                                                Toast.makeText(getContext(), throwable.getMessage(), Toast.LENGTH_SHORT).show();
-                                            }));
+                                    EventBus.getDefault().postSticky(new DismissDoneServiceEvent(true));
+//                                    Log.d("daaaa", "Crash");
+//                                    MyToken myToken = new MyToken();
+//                                    for (DocumentSnapshot documentSnapshot : task1.getResult())
+//                                        myToken = documentSnapshot.toObject(MyToken.class);
+//
+//                                    Log.d("FCM", "sendNotificationUpdateToUser: " + myToken);
+//                                    //send notification
+//                                    FCMSendData fcmSendData = new FCMSendData();
+//                                    Map<String, String> dataSend = new HashMap<>();
+//                                    dataSend.put("update_done", "true");
+//
+//                                    dataSend.put(Common.TITLE_KEY, "Finish Services");
+//                                    dataSend.put(Common.CONTENT_KEY, "Thank you for booking our services (Barber: " + Common.currentBarber.getName() + ")");
+//
+//                                    //put information for rating
+//                                    dataSend.put(Common.RATING_STATE_KEY, Common.stateName);
+//                                    dataSend.put(Common.RATING_SALON_ID, Common.selectedSalon.getId());
+//                                    dataSend.put(Common.RATING_SALON_NAME, Common.selectedSalon.getName());
+//                                    dataSend.put(Common.RATING_BARBER_ID, Common.currentBarber.getBarberId());
+//
+//                                    fcmSendData.setTo(myToken.getToken());
+//                                    fcmSendData.setData(dataSend);
+//
+//                                    compositeDisposable.add(ifcmService.sendNotification(fcmSendData)
+//                                            .subscribeOn(Schedulers.io())
+//                                            .observeOn(Schedulers.newThread())
+//                                            .subscribe(fcmResponse -> {
+////                                                dialog.dismiss();
+//                                                dismiss();
+//                                                EventBus.getDefault().postSticky(new DismissDoneServiceEvent(true));
+//                                            }, throwable -> {
+////                                                dialog.dismiss();
+//                                                Toast.makeText(getContext(), throwable.getMessage(), Toast.LENGTH_SHORT).show();
+//                                            }));
 
 
                                 }
                             });
 
                 }).addOnFailureListener(e -> {
-//                        if (dialog.isShowing())
-//                            dialog.dismiss();
+                        if (dialog.isShowing())
+                            dialog.dismiss();
                     Toast.makeText(getContext(), e.getMessage(), Toast.LENGTH_SHORT).show();
                 });
 
     }
 
     private void init() {
-//        dialog = new SpotsDialog.Builder().setContext(getContext())
-//                .setCancelable(false).build();
+        dialog = new LoadingDialog(getContext());
 
         ifcmService = RetrofitClient.getInstance().create(IFCMService.class);
     }
