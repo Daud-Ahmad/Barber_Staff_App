@@ -322,7 +322,18 @@ public class DoneServiceActivity extends AppCompatActivity implements IBarberSer
             }
         }
 
+        outerLoop: for (int i = 0; i < barberServicesList.size(); i++) {
+            for (int j = 0; j < Common.currentBookingInfo.getBarberServiceList().size(); j++){
+                if (barberServicesList.get(i).getUid().equals(Common.currentBookingInfo.getBarberServiceList().get(j))) {
+                    BarberServices itemToMove = barberServicesList.remove(i);
+                    barberServicesList.add(0, itemToMove);
+                    break outerLoop;
+                }
+            }
+        }
+
         MyServiceAdapter myServiceAdapter = new MyServiceAdapter(this, barberServicesList, Common.currentBookingInfo.getBarberServiceList());
+
         binding.recyclerServices.setAdapter(myServiceAdapter);
 
 

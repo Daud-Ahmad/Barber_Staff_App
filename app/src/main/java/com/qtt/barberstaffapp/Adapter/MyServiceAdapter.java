@@ -87,13 +87,13 @@ public class MyServiceAdapter extends RecyclerView.Adapter<MyServiceAdapter.MyVi
 
 
         holder.setiRecyclerItemSelectedListener((view, position1) -> {
-            for (CardView cardView : cardViewList)
-                cardView.setCardBackgroundColor(context.getResources().getColor(android.R.color.white));
-
-            cardViewList.get(position).setCardBackgroundColor(context.getResources().getColor(android.R.color.holo_orange_dark));
-
-            //call event bus calc total price
-            Common.selectedService = servicesList.get(position1);
+//            for (CardView cardView : cardViewList)
+//                cardView.setCardBackgroundColor(context.getResources().getColor(android.R.color.white));
+//
+//            cardViewList.get(position).setCardBackgroundColor(context.getResources().getColor(android.R.color.holo_orange_dark));
+//
+//            //call event bus calc total price
+//            Common.selectedService = servicesList.get(position1);
         });
     }
 
